@@ -23,7 +23,6 @@ func init() {
 func main() {
 	flag.Parse()
 	cfg := LoadConfig(cfgFile)
-	fmt.Println(cfg)
 	slog.Info("config loaded", "config", cfg)
 	dstAddr := net.JoinHostPort(cfg.DstHost, strconv.Itoa(cfg.DstPort))
 	listenAddr := fmt.Sprintf(":%d", cfg.Port)
