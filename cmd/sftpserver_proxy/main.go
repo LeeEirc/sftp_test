@@ -9,6 +9,7 @@ import (
 	"net"
 	"os"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/gliderlabs/ssh"
@@ -147,11 +148,37 @@ type RemoteSFTP struct {
 }
 
 func (r *RemoteSFTP) Fileread(req *sftp.Request) (io.ReaderAt, error) {
-	return r.sftpClient.Open(req.Filepath)
+	sftpfd, err := r.sftpClient.Open(req.Filepath)
+	if err != nil {
+		return nil, err
+	}
+	go func() {
+		<-req.Context().Done()
+		if err1 := sftpfd.Close(); err1 != nil {
+			slog.Error("remote sftp file close error", "error", err1, "file", req.Filepath)
+		}
+		slog.Info("sftp file read done", "file", req.Filepath)
+	}()
+	return &LockFile{
+		fd: sftpfd,
+	}, nil
 }
 
 func (r *RemoteSFTP) Filewrite(req *sftp.Request) (io.WriterAt, error) {
-	return r.sftpClient.Create(req.Filepath)
+	sftpfd, err := r.sftpClient.Create(req.Filepath)
+	if err != nil {
+		return nil, err
+	}
+	go func() {
+		<-req.Context().Done()
+		if err1 := sftpfd.Close(); err1 != nil {
+			slog.Error("remote sftp file close error", "error", err1, "file", req.Filepath)
+		}
+		slog.Info("sftp file write done", "file", req.Filepath)
+	}()
+	return &LockFile{
+		fd: sftpfd,
+	}, nil
 }
 
 func (r *RemoteSFTP) Filecmd(req *sftp.Request) error {
@@ -211,4 +238,21 @@ func (f listerat) ListAt(ls []os.FileInfo, offset int64) (int, error) {
 		return n, io.EOF
 	}
 	return n, nil
+}
+
+type LockFile struct {
+	fd *sftp.File
+	sync.Mutex
+}
+
+func (l *LockFile) WriteAt(p []byte, off int64) (n int, err error) {
+	l.Lock()
+	defer l.Unlock()
+	return l.fd.WriteAt(p, off)
+}
+
+func (l *LockFile) ReadAt(p []byte, off int64) (n int, err error) {
+	l.Lock()
+	defer l.Unlock()
+	return l.fd.ReadAt(p, off)
 }
