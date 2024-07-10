@@ -99,6 +99,31 @@ func (s Server) Start() error {
 				return
 			}
 			defer sshSess.Close()
+			modes := gossh.TerminalModes{
+				gossh.ECHO:          1,     // enable echoing
+				gossh.TTY_OP_ISPEED: 14400, // input speed = 14.4 kbaud
+				gossh.TTY_OP_OSPEED: 14400, // output speed = 14.4 kbaud
+			}
+			pty, winChan, ok1 := sess.Pty()
+			if !ok1 {
+				slog.Error("failed to get pty")
+				return
+			}
+			err = sshSess.RequestPty(pty.Term, pty.Window.Height, pty.Window.Width, modes)
+			if err != nil {
+				slog.Error("failed to request pty", "error", err)
+				return
+			}
+			go func() {
+				for win := range winChan {
+					err3 := sshSess.WindowChange(win.Height, win.Width)
+					if err3 != nil {
+						slog.Error("failed to change window", "error", err3)
+						continue
+					}
+					slog.Info("window changed", "width", win.Width, "height", win.Height)
+				}
+			}()
 			sshSess.Stdout = sess
 			sshSess.Stderr = sess.Stderr()
 			sshSess.Stdin = sess
@@ -111,6 +136,7 @@ func (s Server) Start() error {
 			if err4 != nil {
 				slog.Error("remote shell wait failed", "error", err4)
 			}
+			slog.Info("session closed", "user", sess.User(), "addr", sess.RemoteAddr())
 		},
 		SubsystemHandlers: map[string]ssh.SubsystemHandler{
 			"sftp": s.sftpSubsystemHandler,
