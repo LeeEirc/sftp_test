@@ -5,8 +5,8 @@ BUILDDIR=build
 
 define make_artifact_full
 	@echo "build $(1)-$(2)"
-	GOOS=$(1) GOARCH=$(2) go build -o $(BUILDDIR)/${SFTPSERVER}-$(1)-$(2) ./cmd/sftpserver_proxy
-	GOOS=$(1) GOARCH=$(2) go build -o $(BUILDDIR)/${TCPPROXY}-$(1)-$(2) ./cmd/tcp_proxy
+	CGO_ENABLED=0 GOOS=$(1) GOARCH=$(2) go build -o $(BUILDDIR)/${SFTPSERVER}-$(1)-$(2) ./cmd/sftpserver_proxy
+	CGO_ENABLED=0 GOOS=$(1) GOARCH=$(2) go build -o $(BUILDDIR)/${TCPPROXY}-$(1)-$(2) ./cmd/tcp_proxy
 endef
 
 all:
