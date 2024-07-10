@@ -2,6 +2,7 @@ package main
 
 import (
 	_ "embed"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -75,11 +76,41 @@ func (s Server) Start() error {
 	srv := &ssh.Server{
 		Addr:        s.Addr,
 		HostSigners: []ssh.Signer{singer},
-		PasswordHandler: func(ctx ssh.Context, pass string) bool {
-			return pass == s.cfg.Password
+		PasswordHandler: func(ctx ssh.Context, pass string) error {
+			ok := pass == s.cfg.Password
+			if !ok {
+				slog.Warn("password auth failed", "user", ctx.User(), "addr", ctx.RemoteAddr())
+				return errors.New("password auth failed")
+			}
+			slog.Info("password auth success", "user", ctx.User(), "addr", ctx.RemoteAddr())
+			return nil
 		},
-		Handler: func(s ssh.Session) {
-			fmt.Fprintln(s, "Hello, world!")
+		Handler: func(sess ssh.Session) {
+			slog.Info("session started", "user", sess.User(), "addr", sess.RemoteAddr())
+			sshClient, err1 := s.createRemoteSSH()
+			if err1 != nil {
+				slog.Error("failed to create remote ssh", "error", err1)
+				return
+			}
+			defer sshClient.Close()
+			sshSess, err2 := sshClient.NewSession()
+			if err2 != nil {
+				slog.Error("failed to create remote session", "error", err2)
+				return
+			}
+			defer sshSess.Close()
+			sshSess.Stdout = sess
+			sshSess.Stderr = sess.Stderr()
+			sshSess.Stdin = sess
+			err3 := sshSess.Shell()
+			if err3 != nil {
+				slog.Error("failed to start remote shell", "error", err3)
+				return
+			}
+			err4 := sshSess.Wait()
+			if err4 != nil {
+				slog.Error("remote shell wait failed", "error", err4)
+			}
 		},
 		SubsystemHandlers: map[string]ssh.SubsystemHandler{
 			"sftp": s.sftpSubsystemHandler,

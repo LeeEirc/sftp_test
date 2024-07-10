@@ -14,3 +14,5 @@ require (
 	github.com/kr/fs v0.1.0 // indirect
 	golang.org/x/sys v0.21.0 // indirect
 )
+
+replace github.com/gliderlabs/ssh => github.com/jumpserver-dev/ssh v0.3.10
