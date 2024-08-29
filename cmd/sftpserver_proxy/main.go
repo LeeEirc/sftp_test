@@ -140,7 +140,9 @@ func (s Server) Start() error {
 		},
 		SubsystemHandlers: map[string]ssh.SubsystemHandler{
 			"sftp": s.sftpSubsystemHandler,
+			// x11 handler
 		},
+		RequestHandlers: map[string]ssh.RequestHandler{},
 	}
 	return srv.ListenAndServe()
 }
